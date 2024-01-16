@@ -1,43 +1,31 @@
-// import React from 'react'
-// import { UseSelector, useSelector } from 'react-redux'
 
-// const User = () => {
-//   const { status, user, error } = useSelector((state) => state.user);
-
-//   return (
-//     <div>
-//      {user && (
-//         <div>
-//           <p>Welcome, {user.firstname} {user.lastname}!</p>
-//           {/* Additional user information display */}
-//         </div>
-//       )}
-//     </div>
-//   )
-// }
-
-// export default User
-// src/components/UserTasks.js
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { setTasks } from '../UserSlice';
+import TaskModal from './TaskModal';
 
 const User = () => {
   const dispatch = useDispatch();
   const userTasks = useSelector((state) => state.tasks);
-  const user=useSelector((state) => state.user);
-  const temp=[user]
-  const userEmail= temp[0].user?.email;
+  const user = useSelector((state) => state.user);
+  const temp = [user];
+  const userEmail = temp[0].user?.email;
   const [editingTask, setEditingTask] = useState(null);
+  const [editedTaskData, setEditedTaskData] = useState({ title: '', description: '' });
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  
+  const handleCreateClick = () => {
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
 
   useEffect(() => {
-    console.log(temp[0],"userEmail")
     const fetchUserTasks = async () => {
       try {
         const response = await fetch(`http://localhost:3001/user/${userEmail}/tasks`);
-        console.log(response,"response")
         const data = await response.json();
         dispatch(setTasks(data));
       } catch (error) {
@@ -46,10 +34,51 @@ const User = () => {
     };
 
     fetchUserTasks();
-  }, [dispatch]);
+  }, [dispatch, userEmail]);
 
   const handleEditClick = (task) => {
     setEditingTask(task);
+    setEditedTaskData({ title: task.title, description: task.description });
+  };
+
+  const handleSaveEditClick = async (taskId, updatedTaskData) => {
+    // Implement your logic for saving the edited task
+    console.log('Save edited task:', taskId);
+    try {
+      const response = await fetch(`http://localhost:3001/user/${userEmail}/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedTaskData),
+      });
+
+      if (response.ok) {
+        // Assuming the response includes the updated task data
+        const updatedTask = await response.json();
+
+        // Update the task in the Redux store or state
+        const updatedTasks = temp[0].Task.map((task) =>
+          task._id === taskId ? updatedTask : task
+        );
+
+        dispatch(setTasks(updatedTasks));
+
+        // Clear editing state
+        setEditingTask(null);
+        setEditedTaskData({ title: '', description: '' });
+      } else {
+        console.error('Error updating task:', response.status);
+      }
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
+
+  // Handle changes in the input fields
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditedTaskData((prevData) => ({ ...prevData, [name]: value }));
   };
 
   const handleDeleteClick = async (taskId) => {
@@ -62,7 +91,7 @@ const User = () => {
         },
       });
       if (response.ok) {
-        const updatedTasks = userTasks.filter((task) => task._id !== taskId);
+        const updatedTasks = temp[0].Task.filter((task) => task._id !== taskId);
         dispatch(setTasks(updatedTasks));
       } else {
         console.error('Error deleting task:', response.status);
@@ -72,34 +101,34 @@ const User = () => {
     }
   };
 
-  const handleCreateClick = () => {
-    // Implement your logic for creating a new task
-    console.log('Create a new task');
-  };
+  const handleCreateTask = async (newTaskData) => {
+    try {
+      const response = await fetch(`http://localhost:3001/user/${userEmail}/tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newTaskData),
+      });
 
-  const handleSaveEditClick = () => {
-    // Implement your logic for saving the edited task
-    console.log('Save edited task:', editingTask);
-    setEditingTask(null); // Clear the editingTask state after saving
+      if (response.ok) {
+        const createdTask = await response.json();
+        const updatedTasks = [...temp[0].Task, createdTask];
+        dispatch(setTasks(updatedTasks));
+      } else {
+        console.error('Error creating task:', response.status);
+      }
+    } catch (error) {
+      console.error('Error creating task:', error);
+    }
   };
 
 
   return (
-    // <div>
-    //   <h1>User Tasks</h1>
-    //   <ul>
-    //     {console.log(temp[0].Task,"temp")}
-    //     {temp[0].Task.map((task) => (
-    //       <li key={task?._id}>
-    //         <strong>{task?.title}</strong> - {task?.description}
-    //       </li>
-    //     ))}
-    //   </ul>
-    // </div>
-
     <div>
     <h1>User Tasks</h1>
     <button onClick={handleCreateClick}>Create Task</button>
+    <TaskModal isOpen={isModalOpen} onClose={handleCloseModal} onCreateTask={handleCreateTask} />
     <table>
       <thead>
         <tr>
@@ -111,14 +140,35 @@ const User = () => {
       <tbody>
         {temp[0].Task.map((task) => (
           <tr key={task._id}>
-            <td>{editingTask === task ? <input value={task.title} /> : task.title}</td>
-            <td>{editingTask === task ? <input value={task.description} /> : task.description}</td>
             <td>
               {editingTask === task ? (
-                <button onClick={handleSaveEditClick}>Save</button>
+                <input
+                  name="title"
+                  value={editedTaskData.title}
+                  onChange={handleInputChange}
+                />
+              ) : (
+                task.title
+              )}
+            </td>
+            <td>
+              {editingTask === task ? (
+                <input
+                  name="description"
+                  value={editedTaskData.description}
+                  onChange={handleInputChange}
+                />
+              ) : (
+                task.description
+              )}
+            </td>
+            <td>
+              {editingTask === task ? (
+                <button onClick={() => handleSaveEditClick(task._id, editedTaskData)}>Save</button>
               ) : (
                 <>
                   <button onClick={() => handleEditClick(task)}>Edit</button>
+                  &nbsp;    &nbsp;   
                   <button onClick={() => handleDeleteClick(task._id)}>Delete</button>
                 </>
               )}
